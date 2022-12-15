@@ -1,16 +1,78 @@
-import { useState } from "react";
+import { useAuthRequestChallengeEvm } from "@moralisweb3/next";
+import { Session } from "next-auth";
+import { getSession, signIn, signOut } from "next-auth/react";
+import Head from "next/head";
+import { useEffect, useState } from "react";
+import { useAccount, useConnect, useDisconnect, useSignMessage } from "wagmi";
+import { MetaMaskConnector } from "wagmi/connectors/metaMask";
 
-export default function navbar() {
+export default function navbar(props) {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [loggedIn, setLoggedIn] = useState<Session | null>(null);
+  const { connectAsync } = useConnect();
+  const { disconnectAsync } = useDisconnect();
+  const { isConnected } = useAccount();
+  const { signMessageAsync } = useSignMessage();
+  const { requestChallengeAsync } = useAuthRequestChallengeEvm();
+
+  useEffect(() => {
+    getUserFromSession();
+  }, []);
+
+  async function getUserFromSession() {
+    const session = await getSession();
+
+    // redirect if not authenticated
+    if (!session) {
+      setLoggedIn(null);
+    }
+
+    console.log(session);
+
+    setLoggedIn(session);
+  }
+
+  async function logout() {
+    await signOut();
+    setLoggedIn(null);
+  }
+
+  const handleAuth = async () => {
+    if (isConnected) {
+      await disconnectAsync();
+    }
+
+    const { account, chain } = await connectAsync({
+      connector: new MetaMaskConnector(),
+    });
+
+    const { message } = await requestChallengeAsync({
+      address: account,
+      chainId: chain.id,
+    });
+
+    const signature = await signMessageAsync({ message });
+
+    // redirect user after success authentication to '/user' page
+    await signIn("moralis-auth", {
+      message,
+      signature,
+      redirect: false,
+    });
+
+    // console.log(signature);
+    await getUserFromSession();
+  };
 
   const toggleMobileMenu = function () {
-    console.log("cliciiicici");
-
     setShowMobileMenu(!showMobileMenu);
   };
 
   return (
     <>
+      <Head>
+        <title>TicketChain.live</title>
+      </Head>
       <div>
         <div className="fixed inset-x-0 top-[-10rem] -z-10 transform-gpu overflow-hidden blur-3xl sm:top-[-20rem]">
           <svg
@@ -107,12 +169,27 @@ export default function navbar() {
                 </a>
               </div>
               <div className="hidden lg:flex lg:min-w-0 lg:flex-1 lg:justify-end">
-                <a
-                  href="#"
-                  className="inline-block mr-4 rounded-lg px-3 py-1.5 text-sm font-semibold leading-6 text-gray-900 shadow-sm ring-1 ring-gray-900/10 hover:ring-gray-900/20"
-                >
-                  Log in
-                </a>
+                {loggedIn === null ? (
+                  <>
+                    <a
+                      href="#"
+                      onClick={handleAuth}
+                      className="inline-block mr-4 rounded-lg px-3 py-1.5 text-sm font-semibold leading-6 text-gray-900 shadow-sm ring-1 ring-gray-900/10 hover:ring-gray-900/20"
+                    >
+                      Log in
+                    </a>
+                  </>
+                ) : (
+                  <>
+                    <a
+                      href="#"
+                      className="max-w-[7rem] text-ellipsis overflow-hidden inline-block mr-4 rounded-lg px-3 py-1.5 text-sm font-semibold leading-6 text-gray-900 shadow-sm ring-1 ring-gray-900/10 hover:ring-gray-900/20"
+                    >
+                      {loggedIn?.user?.address}
+                    </a>
+                  </>
+                )}
+
                 <a
                   href="/dapp"
                   className="inline-block rounded-lg px-3 py-1.5 text-sm font-semibold leading-6 text-gray-900 shadow-sm ring-1 ring-gray-900/10 hover:ring-gray-900/20"
@@ -195,11 +272,33 @@ export default function navbar() {
                           </a>
                         </div>
                         <div className="py-6">
+                          {loggedIn === null ? (
+                            <>
+                              <a
+                                href="#"
+                                onClick={handleAuth}
+                                className="inline-block mr-4 rounded-lg px-3 py-1.5 text-sm font-semibold leading-6 text-gray-900 shadow-sm ring-1 ring-gray-900/10 hover:ring-gray-900/20"
+                              >
+                                Log in
+                              </a>
+                            </>
+                          ) : (
+                            <>
+                              <a
+                                href="#"
+                                className="max-w-xs text-ellipsis overflow-hidden  -mx-3 block rounded-lg py-2 px-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-400/10"
+                              >
+                                {loggedIn?.user?.address}
+                              </a>
+                            </>
+                          )}
+                          <br />
                           <a
                             href="#"
-                            className="-mx-3 block rounded-lg py-2.5 px-3 text-base font-semibold leading-6 text-gray-900 hover:bg-gray-400/10"
+                            onClick={logout}
+                            className="-mx-3 block rounded-lg py-2 px-3 text-base font-semibold leading-7 text-gray-900 hover:bg-gray-400/10"
                           >
-                            Log in
+                            Log out
                           </a>
                         </div>
                       </div>
